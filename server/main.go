@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -52,7 +53,33 @@ func (s *ProductServiceServer) CreateProduct(ctx context.Context, req *productpb
 
 // GetProduct method
 func (s *ProductServiceServer) GetProduct(ctx context.Context, req *productpb.GetProductReq) (*productpb.GetProductRes, error) {
-	return nil, nil
+	// convert string ID to mongoDb ObjectId
+	oid, err := primitive.ObjectIDFromHex(req.GetId())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("Could not convert to ObjectId: %v", err))
+	}
+
+	result := productdb.FindOne(ctx, bson.M{"_id": oid})
+
+	// Empty product to write decode result
+	data := ProductItem{}
+
+	// decode and write to data
+	if err := result.Decode(&data); err != nil {
+		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("Could not find product with Object Id %s: %v", req.GetId(), err))
+	}
+
+	response := &productpb.GetProductRes{
+		Product: &productpb.Product{
+			Id:       oid.Hex(),
+			Category: data.Category,
+			Title:    data.Title,
+			Price:    data.Price,
+			Quantity: data.Quantity,
+		},
+	}
+
+	return response, nil
 }
 
 // UpdateProduct method
