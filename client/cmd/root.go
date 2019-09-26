@@ -76,7 +76,10 @@ func init() {
 	fmt.Println("Starting Product Service Client")
 
 	// Establish context to timeout if server does not respond
-	requestCtx, _ = context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	requestCtx = ctx
 
 	// Establish insecure grpc options (no TLS)
 	requestOpts := grpc.WithInsecure()
