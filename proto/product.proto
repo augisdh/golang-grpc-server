@@ -7,7 +7,7 @@ service ProductService {
 	rpc GetProduct(GetProductReq) returns (GetProductRes);
 	rpc UpdateProduct(UpdateProductReq) returns (UpdateProductRes);
 	rpc DeleteProduct(DeleteProductReq) returns (DeleteProductRes);
-	rpc GetAllProducts(GetAllProductsReq) returns (GetAllProductsRes);
+	rpc GetAllProducts(GetAllProductsReq) returns (stream GetAllProductsRes);
 }
 
 message Product {

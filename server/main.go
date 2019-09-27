@@ -148,14 +148,14 @@ func (s *ProductServiceServer) DeleteProduct(ctx context.Context, req *productpb
 }
 
 // GetAllProducts method
-func (s *ProductServiceServer) GetAllProducts(req *productpb.GetAllProductsReq, stream productpb.ProductService_GetAllProducts) error {
+func (s *ProductServiceServer) GetAllProducts(req *productpb.GetAllProductsReq, stream productpb.ProductService_GetAllProductsServer) error {
 	// Initiante ProductItem type to write decoded data to
 	data := &ProductItem{}
 
 	// return a cursor for empty query
 	cursor, err := productdb.Find(context.Background(), bson.M{})
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, fmt.Sprintf("Unknow internal error %v", err))
+		return status.Errorf(codes.Internal, fmt.Sprintf("Unknown internal error: %v", err))
 	}
 
 	// Close cursor when there is no more data to stream
@@ -165,7 +165,7 @@ func (s *ProductServiceServer) GetAllProducts(req *productpb.GetAllProductsReq, 
 	for cursor.Next(context.Background()) {
 		err := cursor.Decode(data)
 		if err != nil {
-			return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("Could not decode data: %v", err))
+			return status.Errorf(codes.Unavailable, fmt.Sprintf("Could not decode data: %v", err))
 		}
 
 		// If no error send product over stream
@@ -182,10 +182,10 @@ func (s *ProductServiceServer) GetAllProducts(req *productpb.GetAllProductsReq, 
 
 	// Check if cursor has any errors
 	if err := cursor.Err(); err != nil {
-		return nil, status.Errorf(codes.Internal, fmt.Sprintf("Unknow cursor error: %v", err))
+		return status.Errorf(codes.Internal, fmt.Sprintf("Unknow cursor error: %v", err))
 	}
 
-	return nil, nil
+	return nil
 }
 
 // ProductItem struct
