@@ -84,16 +84,107 @@ func (s *ProductServiceServer) GetProduct(ctx context.Context, req *productpb.Ge
 
 // UpdateProduct method
 func (s *ProductServiceServer) UpdateProduct(ctx context.Context, req *productpb.UpdateProductReq) (*productpb.UpdateProductRes, error) {
-	return nil, nil
+	// Product data from request
+	product := req.GetProduct()
+
+	// Convert id string to MongoDb ObjectId
+	oid, err := primitive.ObjectIDFromHex(product.GetId())
+	if err != nil {
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			fmt.Sprintf("Could not convert supplied id to a MongoDb ObjectId %v", err),
+		)
+	}
+
+	// Convert data to be updated into a unordered Bson document
+	update := bson.M{
+		"category": product.GetCategory(),
+		"title":    product.GetTitle(),
+		"price":    product.GetPrice(),
+		"quantity": product.GetQuantity(),
+	}
+
+	// Convert oid into unordered to search bson document by id
+	filter := bson.M{"_id": oid}
+
+	// Return encoded bson result
+	result := productdb.FindOneAndUpdate(ctx, filter, bson.M{"$set": update}, options.FindOneAndUpdate().SetReturnDocument(1))
+
+	// Decode result and write it to encode
+	decode := ProductItem{}
+	err = result.Decode(&decode)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("Could not find product with supplied ID: %v", err))
+	}
+
+	return &productpb.UpdateProductRes{
+		Product: &productpb.Product{
+			Id:       decode.ID.Hex(),
+			Category: decode.Category,
+			Title:    decode.Title,
+			Price:    decode.Price,
+			Quantity: decode.Quantity,
+		},
+	}, nil
 }
 
 // DeleteProduct method
 func (s *ProductServiceServer) DeleteProduct(ctx context.Context, req *productpb.DeleteProductReq) (*productpb.DeleteProductRes, error) {
-	return nil, nil
+	// convert string ID to mongoDb ObjectId
+	oid, err := primitive.ObjectIDFromHex(req.GetId())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("Could not convert to ObjectId: %v", err))
+	}
+
+	// Delete product
+	_, err = productdb.DeleteOne(ctx, bson.M{"_id": oid})
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("Could not delete product with Object Id %s: %v", req.GetId(), err))
+	}
+
+	return &productpb.DeleteProductRes{
+		Success: true,
+	}, nil
 }
 
 // GetAllProducts method
-func (s *ProductServiceServer) GetAllProducts(ctx context.Context, req *productpb.GetAllProductsReq) (*productpb.GetAllProductsRes, error) {
+func (s *ProductServiceServer) GetAllProducts(req *productpb.GetAllProductsReq, stream productpb.ProductService_GetAllProducts) error {
+	// Initiante ProductItem type to write decoded data to
+	data := &ProductItem{}
+
+	// return a cursor for empty query
+	cursor, err := productdb.Find(context.Background(), bson.M{})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("Unknow internal error %v", err))
+	}
+
+	// Close cursor when there is no more data to stream
+	defer cursor.Close(context.Background())
+
+	// return boolean, if false cursor.Close()
+	for cursor.Next(context.Background()) {
+		err := cursor.Decode(data)
+		if err != nil {
+			return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("Could not decode data: %v", err))
+		}
+
+		// If no error send product over stream
+		stream.Send(&productpb.GetAllProductsRes{
+			Product: &productpb.Product{
+				Id:       data.ID.Hex(),
+				Category: data.Category,
+				Title:    data.Title,
+				Price:    data.Price,
+				Quantity: data.Quantity,
+			},
+		})
+	}
+
+	// Check if cursor has any errors
+	if err := cursor.Err(); err != nil {
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("Unknow cursor error: %v", err))
+	}
+
 	return nil, nil
 }
 
